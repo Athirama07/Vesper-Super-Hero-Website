@@ -1,14 +1,13 @@
 require("dotenv").config();
 
 const express = require("express");
-const nodemailer = require("nodemailer");
-const path = require("path");
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
-const gmailUser = (process.env.GMAIL_USER || "").trim();
-const gmailAppPassword = (process.env.GMAIL_APP_PASSWORD || "").replace(/\s+/g, "");
-const notifyEmail = (process.env.NOTIFY_EMAIL || gmailUser || "").trim();
+
+const resendApiKey = (process.env.RESEND_API_KEY || "").trim();
+const notifyEmail = (process.env.NOTIFY_EMAIL || "").trim();
 
 app.use(express.json({ limit: "1mb" }));
 
@@ -16,48 +15,22 @@ app.use(express.json({ limit: "1mb" }));
 app.use(express.static(__dirname));
 
 
-// ================================
-// EMAIL CONFIGURATION
-// ================================
+// ========================================
+// CONFIGURATION CHECK
+// ========================================
 
-const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,
-    secure: false,
-    auth: {
-        user: gmailUser,
-        pass: gmailAppPassword
-    },
-    tls: {
-        rejectUnauthorized: false
-    }
-});
+if (!resendApiKey) {
+    console.log("⚠️ RESEND_API_KEY is missing.");
+}
 
-
-// Check email connection when server starts
-transporter.verify((error) => {
-
-    if (error) {
-
-        console.log("❌ EMAIL CONNECTION FAILED");
-        console.log(error.message);
-
-    } else {
-
-        console.log("✅ EMAIL SERVER IS READY");
-
-    }
-
-});
-
-if (!gmailUser || !gmailAppPassword) {
-    console.log("⚠️  Gmail credentials are not configured. Add GMAIL_USER and GMAIL_APP_PASSWORD to .env");
+if (!notifyEmail) {
+    console.log("⚠️ NOTIFY_EMAIL is missing.");
 }
 
 
-// ================================
+// ========================================
 // VESPER HELP REQUEST
-// ================================
+// ========================================
 
 app.post("/api/help", async (req, res) => {
 
@@ -70,7 +43,9 @@ app.post("/api/help", async (req, res) => {
     } = req.body || {};
 
 
-    // Validate information
+    // ====================================
+    // VALIDATE VISITOR INFORMATION
+    // ====================================
 
     if (
         !name ||
@@ -81,43 +56,52 @@ app.post("/api/help", async (req, res) => {
     ) {
 
         return res.status(400).json({
-
             success: false,
-
             error: "Missing required information"
-
         });
 
     }
 
 
-    const recipient = notifyEmail || email;
+    // ====================================
+    // CHECK EMAIL CONFIGURATION
+    // ====================================
 
-    if (!recipient) {
+    if (!resendApiKey) {
 
-        return res.status(400).json({
-
+        return res.status(500).json({
             success: false,
-
-            error: "No provider email is configured"
-
+            error: "Email service is not configured"
         });
 
     }
 
 
-    // Indian date and time
+    if (!notifyEmail) {
 
-    const dateTime =
-        new Date().toLocaleString(
-            "en-IN",
-            {
-                timeZone: "Asia/Kolkata"
-            }
-        );
+        return res.status(500).json({
+            success: false,
+            error: "Candidate notification email is not configured"
+        });
+
+    }
 
 
-    // Email content
+    // ====================================
+    // DATE & TIME
+    // ====================================
+
+    const dateTime = new Date().toLocaleString(
+        "en-IN",
+        {
+            timeZone: "Asia/Kolkata"
+        }
+    );
+
+
+    // ====================================
+    // EMAIL CONTENT
+    // ====================================
 
     const html = `
 
@@ -125,9 +109,10 @@ app.post("/api/help", async (req, res) => {
             font-family: Arial, sans-serif;
             max-width: 700px;
             margin: auto;
-            padding: 25px;
+            padding: 30px;
             background: #07111c;
             color: #eeeeee;
+            border-radius: 12px;
         ">
 
             <h1 style="
@@ -139,9 +124,11 @@ app.post("/api/help", async (req, res) => {
 
             <p style="
                 color: #9aa9b5;
+                font-size: 16px;
             ">
                 Lighthouse Guardian — Help Request
             </p>
+
 
             <hr style="
                 border: 0;
@@ -153,7 +140,20 @@ app.post("/api/help", async (req, res) => {
             <h2 style="
                 color: #d7b56b;
             ">
-                Person Details
+                🦸 Someone Needs Your Help!
+            </h2>
+
+
+            <p>
+                Someone has submitted a request through
+                the Vesper Superhero Help Portal.
+            </p>
+
+
+            <h2 style="
+                color: #d7b56b;
+            ">
+                Visitor Details
             </h2>
 
 
@@ -162,24 +162,28 @@ app.post("/api/help", async (req, res) => {
                 ${escapeHtml(name)}
             </p>
 
+
             <p>
                 <strong>Age:</strong>
                 ${escapeHtml(String(age))}
             </p>
+
 
             <p>
                 <strong>Location:</strong>
                 ${escapeHtml(location)}
             </p>
 
+
             <p>
                 <strong>Email:</strong>
                 ${escapeHtml(email)}
             </p>
 
+
             <p>
                 <strong>Date & Time:</strong>
-                ${dateTime}
+                ${escapeHtml(dateTime)}
             </p>
 
 
@@ -202,6 +206,7 @@ app.post("/api/help", async (req, res) => {
                 padding: 20px;
                 border-radius: 8px;
                 line-height: 1.7;
+                white-space: pre-wrap;
             ">
 
                 ${escapeHtml(grievance)}
@@ -223,43 +228,100 @@ app.post("/api/help", async (req, res) => {
     `;
 
 
+    // ====================================
+    // SEND TO CANDIDATE'S EMAIL
+    // ====================================
+
     try {
 
-        await transporter.sendMail({
+        const response = await fetch(
+            "https://api.resend.com/emails",
+            {
+                method: "POST",
 
-            from:
-                `"Vesper Help Portal" <${gmailUser}>`,
+                headers: {
+                    "Content-Type": "application/json",
+                    "Authorization": `Bearer ${resendApiKey}`
+                },
 
-            to: recipient,
+                body: JSON.stringify({
 
-            replyTo: email,
+                    // Resend sender
+                    from: "Vesper Help Portal <onboarding@resend.dev>",
 
-            subject:
-                "🦸 Vesper Help Request — " + name,
+                    // IMPORTANT:
+                    // Notification goes to YOU,
+                    // the candidate.
+                    to: [notifyEmail],
 
-            html: html
+                    // Visitor's email is NOT the recipient.
+                    // It is used for replying to the visitor.
+                    reply_to: email,
 
-        });
+                    subject: "🦸 Someone Needs Your Help!",
 
+                    html: html
+
+                })
+            }
+        );
+
+
+        const result = await response.json();
+
+
+        // ====================================
+        // RESEND ERROR
+        // ====================================
+
+        if (!response.ok) {
+
+            console.log("");
+            console.log("❌ RESEND EMAIL FAILED");
+            console.log(result);
+            console.log("");
+
+            return res.status(500).json({
+
+                success: false,
+
+                error:
+                    result.message ||
+                    "Email notification failed"
+
+            });
+
+        }
+
+
+        // ====================================
+        // SUCCESS
+        // ====================================
 
         console.log("");
         console.log("====================================");
         console.log("✅ VESPER REQUEST SENT");
         console.log("====================================");
 
-        console.log("Name:", name);
-        console.log("Age:", age);
-        console.log("Location:", location);
-        console.log("Email:", email);
+        console.log("Visitor Name:", name);
+        console.log("Visitor Age:", age);
+        console.log("Visitor Location:", location);
+        console.log("Visitor Email:", email);
         console.log("Request:", grievance);
+
+        console.log("Notification sent to:", notifyEmail);
+        console.log("Resend ID:", result.id);
 
         console.log("====================================");
         console.log("");
 
 
-        res.json({
+        return res.json({
 
-            success: true
+            success: true,
+
+            message:
+                "Your request has been sent to Vesper."
 
         });
 
@@ -271,7 +333,7 @@ app.post("/api/help", async (req, res) => {
         console.log(error.message);
         console.log("");
 
-        res.status(500).json({
+        return res.status(500).json({
 
             success: false,
 
@@ -284,16 +346,14 @@ app.post("/api/help", async (req, res) => {
 });
 
 
-// ================================
+// ========================================
 // SECURITY
-// ================================
+// ========================================
 
 function escapeHtml(value) {
 
     return String(value).replace(
-
         /[&<>"']/g,
-
         character => ({
 
             "&": "&amp;",
@@ -303,23 +363,23 @@ function escapeHtml(value) {
             "'": "&#039;"
 
         }[character])
-
     );
 
 }
 
 
-// ================================
+// ========================================
 // START SERVER
-// ================================
+// ========================================
 
-app.listen(PORT, () => {
+app.listen(PORT, "0.0.0.0", () => {
 
     console.log("");
     console.log("====================================");
     console.log("🌙 VESPER PORTAL");
     console.log("====================================");
     console.log(`🚀 Server running on port ${PORT}`);
+    console.log("📧 Notification email:", notifyEmail);
     console.log("====================================");
     console.log("");
 
