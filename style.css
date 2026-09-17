@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Space+Grotesk:wght@400;500;700&display=swap');
+
+:root {
+  color-scheme: dark;
+  --ink: #f4efe6;
+  --muted: #b8b3ab;
+  --night: #101216;
+  --ember: #ed6a3a;
+  --line: rgba(244, 239, 230, 0.2);
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  color: var(--ink);
+  background: var(--night);
+  font-family: 'Space Grotesk', sans-serif;
+}
+
+.hero {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 2rem 6vw 2rem;
+  background:
+    linear-gradient(110deg, rgba(16, 18, 22, 0.98) 10%, rgba(16, 18, 22, 0.5) 58%, rgba(16, 18, 22, 0.8)),
+    url('vesper.png') center / cover,
+    radial-gradient(circle at 80% 20%, #68412e, var(--night) 45%);
+}
+
+.nav { display: flex; justify-content: space-between; align-items: center; }
+.brand { color: var(--ink); font-size: 1.1rem; font-weight: 700; letter-spacing: 0.28em; text-decoration: none; }
+.nav-link { color: var(--muted); font-family: 'DM Mono', monospace; font-size: 0.75rem; text-decoration: none; }
+.nav-link:hover { color: var(--ink); }
+
+.hero-content { max-width: 42rem; margin: auto 0; padding: 8vh 0; }
+.eyebrow, .coordinates, .status { color: var(--ember); font-family: 'DM Mono', monospace; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; }
+h1 { max-width: 9ch; margin: 1rem 0; font-size: clamp(3.5rem, 9vw, 8rem); line-height: 0.92; letter-spacing: -0.06em; }
+.intro { max-width: 28rem; color: var(--muted); font-size: 1.15rem; line-height: 1.6; }
+.cta { margin-top: 1.5rem; border: 1px solid var(--ember); padding: 0.9rem 1.2rem; color: var(--ink); background: var(--ember); font: 500 0.8rem 'DM Mono', monospace; text-transform: uppercase; cursor: pointer; }
+.cta:hover { background: transparent; }
+.status { min-height: 1.2em; }
+.coordinates { margin: 0; color: var(--muted); }
+
+@media (max-width: 600px) {
+  .hero { padding: 1.5rem 1.25rem; }
+  .nav-link { font-size: 0.65rem; }
+  h1 { font-size: clamp(3.2rem, 17vw, 5rem); }
+}
